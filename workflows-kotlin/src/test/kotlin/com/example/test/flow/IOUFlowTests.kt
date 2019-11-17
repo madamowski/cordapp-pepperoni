@@ -1,7 +1,7 @@
 package com.example.test.flow
 
 import com.example.flow.ExampleFlow
-import com.example.state.IOUState
+import com.example.state.TradeState
 import net.corda.core.contracts.TransactionVerificationException
 import net.corda.core.node.services.queryBy
 import net.corda.core.utilities.getOrThrow
@@ -96,10 +96,10 @@ class IOUFlowTests {
             val txOutputs = recordedTx!!.tx.outputs
             assert(txOutputs.size == 1)
 
-            val recordedState = txOutputs[0].data as IOUState
-            assertEquals(recordedState.value, iouValue)
-            assertEquals(recordedState.lender, a.info.singleIdentity())
-            assertEquals(recordedState.borrower, b.info.singleIdentity())
+            val recordedState = txOutputs[0].data as TradeState
+            assertEquals(recordedState.price, iouValue)
+            assertEquals(recordedState.buyer, a.info.singleIdentity())
+            assertEquals(recordedState.seller, b.info.singleIdentity())
         }
     }
 
@@ -114,12 +114,12 @@ class IOUFlowTests {
         // We check the recorded IOU in both vaults.
         for (node in listOf(a, b)) {
             node.transaction {
-                val ious = node.services.vaultService.queryBy<IOUState>().states
+                val ious = node.services.vaultService.queryBy<TradeState>().states
                 assertEquals(1, ious.size)
                 val recordedState = ious.single().state.data
-                assertEquals(recordedState.value, iouValue)
-                assertEquals(recordedState.lender, a.info.singleIdentity())
-                assertEquals(recordedState.borrower, b.info.singleIdentity())
+                assertEquals(recordedState.price, iouValue)
+                assertEquals(recordedState.buyer, a.info.singleIdentity())
+                assertEquals(recordedState.seller, b.info.singleIdentity())
             }
         }
     }

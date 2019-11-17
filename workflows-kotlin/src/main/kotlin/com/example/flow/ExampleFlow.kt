@@ -1,10 +1,10 @@
 package com.example.flow
 
 import co.paralleluniverse.fibers.Suspendable
-import com.example.contract.IOUContract
+import com.example.contract.TradeContract
 import com.example.flow.ExampleFlow.Acceptor
 import com.example.flow.ExampleFlow.Initiator
-import com.example.state.IOUState
+import com.example.state.TradeState
 import net.corda.core.contracts.Command
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
@@ -15,10 +15,10 @@ import net.corda.core.utilities.ProgressTracker
 import net.corda.core.utilities.ProgressTracker.Step
 
 /**
- * This flow allows two parties (the [Initiator] and the [Acceptor]) to come to an agreement about the IOU encapsulated
- * within an [IOUState].
+ * This flow allows two parties (the [Initiator] and the [Acceptor]) to come to an agreement about the Trade encapsulated
+ * within an [TradeState].
  *
- * In our simple example, the [Acceptor] always accepts a valid IOU.
+ * In our simple example, the [Acceptor] always accepts a valid Trade.
  *
  * These flows have deliberately been implemented by using only the call() method for ease of understanding. In
  * practice we would recommend splitting up the various stages of the flow into sub-routines.
@@ -28,14 +28,15 @@ import net.corda.core.utilities.ProgressTracker.Step
 object ExampleFlow {
     @InitiatingFlow
     @StartableByRPC
-    class Initiator(val iouValue: Int,
+    class Initiator(val price: Int,
+                    val asset: String,
                     val otherParty: Party) : FlowLogic<SignedTransaction>() {
         /**
          * The progress tracker checkpoints each stage of the flow and outputs the specified messages when each
          * checkpoint is reached in the code. See the 'progressTracker.currentStep' expressions within the call() function.
          */
         companion object {
-            object GENERATING_TRANSACTION : Step("Generating transaction based on new IOU.")
+            object GENERATING_TRANSACTION : Step("Generating transaction based on new Trade.")
             object VERIFYING_TRANSACTION : Step("Verifying contract constraints.")
             object SIGNING_TRANSACTION : Step("Signing transaction with our private key.")
             object GATHERING_SIGS : Step("Gathering the counterparty's signature.") {
@@ -68,10 +69,10 @@ object ExampleFlow {
             // Stage 1.
             progressTracker.currentStep = GENERATING_TRANSACTION
             // Generate an unsigned transaction.
-            val iouState = IOUState(iouValue, serviceHub.myInfo.legalIdentities.first(), otherParty)
-            val txCommand = Command(IOUContract.Commands.Create(), iouState.participants.map { it.owningKey })
+            val tradeState = TradeState(price, asset, serviceHub.myInfo.legalIdentities.first(), otherParty)
+            val txCommand = Command(TradeContract.Commands.Create(), tradeState.participants.map { it.owningKey })
             val txBuilder = TransactionBuilder(notary)
-                    .addOutputState(iouState, IOUContract.ID)
+                    .addOutputState(tradeState, TradeContract.ID)
                     .addCommand(txCommand)
 
             // Stage 2.
@@ -104,9 +105,9 @@ object ExampleFlow {
             val signTransactionFlow = object : SignTransactionFlow(otherPartySession) {
                 override fun checkTransaction(stx: SignedTransaction) = requireThat {
                     val output = stx.tx.outputs.single().data
-                    "This must be an IOU transaction." using (output is IOUState)
-                    val iou = output as IOUState
-                    "I won't accept IOUs with a value over 100." using (iou.value <= 100)
+                    "This must be an Trade transaction." using (output is TradeState)
+                    val trade = output as TradeState
+                    "I won't accept Trades with a price over 100." using (trade.price <= 100)
                 }
             }
             val txId = subFlow(signTransactionFlow).id

@@ -1,0 +1,3 @@
+flow run
+flow start ExampleFlow$Initiator price: 50, asset: "Bond2", otherParty: "O=PartyB,L=New York,C=US"
+run vaultQuery contractStateType: com.example.state.TradeState

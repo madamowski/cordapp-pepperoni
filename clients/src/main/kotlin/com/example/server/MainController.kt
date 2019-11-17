@@ -1,7 +1,7 @@
 package com.example.server
 
 import com.example.flow.ExampleFlow.Initiator
-import com.example.state.IOUState
+import com.example.state.TradeState
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.messaging.startTrackedFlow
@@ -9,9 +9,13 @@ import net.corda.core.messaging.vaultQueryBy
 import net.corda.core.utilities.getOrThrow
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType.*
+import org.springframework.http.MediaType.APPLICATION_JSON_VALUE
+import org.springframework.http.MediaType.TEXT_PLAIN_VALUE
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
 import javax.servlet.http.HttpServletRequest
 
 val SERVICE_NAMES = listOf("Notary", "Network Map Service")
@@ -34,14 +38,14 @@ class MainController(rpc: NodeRPCConnection) {
     /**
      * Returns the node's name.
      */
-    @GetMapping(value = [ "me" ], produces = [ APPLICATION_JSON_VALUE ])
+    @GetMapping(value = ["me"], produces = [APPLICATION_JSON_VALUE])
     fun whoami() = mapOf("me" to myLegalName)
 
     /**
      * Returns all parties registered with the network map service. These names can be used to look up identities using
      * the identity service.
      */
-    @GetMapping(value = [ "peers" ], produces = [ APPLICATION_JSON_VALUE ])
+    @GetMapping(value = ["peers"], produces = [APPLICATION_JSON_VALUE])
     fun getPeers(): Map<String, List<CordaX500Name>> {
         val nodeInfo = proxy.networkMapSnapshot()
         return mapOf("peers" to nodeInfo
@@ -53,9 +57,9 @@ class MainController(rpc: NodeRPCConnection) {
     /**
      * Displays all IOU states that exist in the node's vault.
      */
-    @GetMapping(value = [ "ious" ], produces = [ APPLICATION_JSON_VALUE ])
-    fun getIOUs() : ResponseEntity<List<StateAndRef<IOUState>>> {
-        return ResponseEntity.ok(proxy.vaultQueryBy<IOUState>().states)
+    @GetMapping(value = ["ious"], produces = [APPLICATION_JSON_VALUE])
+    fun getIOUs(): ResponseEntity<List<StateAndRef<TradeState>>> {
+        return ResponseEntity.ok(proxy.vaultQueryBy<TradeState>().states)
     }
 
     /**
@@ -70,21 +74,26 @@ class MainController(rpc: NodeRPCConnection) {
      * The flow is invoked asynchronously. It returns a future when the flow's call() method returns.
      */
 
-    @PostMapping(value = [ "create-iou" ], produces = [ TEXT_PLAIN_VALUE ], headers = [ "Content-Type=application/x-www-form-urlencoded" ])
+    @PostMapping(value = ["create-iou"], produces = [TEXT_PLAIN_VALUE], headers = ["Content-Type=application/x-www-form-urlencoded"])
     fun createIOU(request: HttpServletRequest): ResponseEntity<String> {
-        val iouValue = request.getParameter("iouValue").toInt()
+        val price = request.getParameter("price").toInt()
+        val asset = request.getParameter("asset")
         val partyName = request.getParameter("partyName")
-        if(partyName == null){
+        if (partyName == null) {
             return ResponseEntity.badRequest().body("Query parameter 'partyName' must not be null.\n")
         }
-        if (iouValue <= 0 ) {
-            return ResponseEntity.badRequest().body("Query parameter 'iouValue' must be non-negative.\n")
+        if (asset == null) {
+            return ResponseEntity.badRequest().body("Query parameter 'asset' must not be null.\n")
+        }
+        if (price <= 0) {
+            return ResponseEntity.badRequest().body("Query parameter 'price' must be non-negative.\n")
         }
         val partyX500Name = CordaX500Name.parse(partyName)
-        val otherParty = proxy.wellKnownPartyFromX500Name(partyX500Name) ?: return ResponseEntity.badRequest().body("Party named $partyName cannot be found.\n")
+        val otherParty = proxy.wellKnownPartyFromX500Name(partyX500Name)
+                ?: return ResponseEntity.badRequest().body("Party named $partyName cannot be found.\n")
 
         return try {
-            val signedTx = proxy.startTrackedFlow(::Initiator, iouValue, otherParty).returnValue.getOrThrow()
+            val signedTx = proxy.startTrackedFlow(::Initiator, price, asset, otherParty).returnValue.getOrThrow()
             ResponseEntity.status(HttpStatus.CREATED).body("Transaction id ${signedTx.id} committed to ledger.\n")
 
         } catch (ex: Throwable) {
@@ -96,9 +105,9 @@ class MainController(rpc: NodeRPCConnection) {
     /**
      * Displays all IOU states that only this node has been involved in.
      */
-    @GetMapping(value = [ "my-ious" ], produces = [ APPLICATION_JSON_VALUE ])
-    fun getMyIOUs(): ResponseEntity<List<StateAndRef<IOUState>>>  {
-        val myious = proxy.vaultQueryBy<IOUState>().states.filter { it.state.data.lender.equals(proxy.nodeInfo().legalIdentities.first()) }
+    @GetMapping(value = ["my-ious"], produces = [APPLICATION_JSON_VALUE])
+    fun getMyIOUs(): ResponseEntity<List<StateAndRef<TradeState>>> {
+        val myious = proxy.vaultQueryBy<TradeState>().states.filter { it.state.data.buyer.equals(proxy.nodeInfo().legalIdentities.first()) }
         return ResponseEntity.ok(myious)
     }
 
