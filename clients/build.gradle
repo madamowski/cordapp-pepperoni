@@ -45,8 +45,6 @@ dependencies {
     compile "org.springframework.boot:spring-boot-starter-log4j2:$spring_boot_version"
     compile "org.apache.logging.log4j:log4j-web:$log4j_version"
 
-    cordapp project(":contracts-java")
-    cordapp project(":workflows-java")
     cordapp project(":contracts-kotlin")
     cordapp project(":workflows-kotlin")
 }
