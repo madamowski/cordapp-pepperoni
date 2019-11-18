@@ -2,10 +2,11 @@ package com.example.flow
 
 import co.paralleluniverse.fibers.Suspendable
 import com.example.contract.TradeContract
-import com.example.flow.ExampleFlow.Acceptor
-import com.example.flow.ExampleFlow.Initiator
+import com.example.flow.TradeFlow.Acceptor
+import com.example.flow.TradeFlow.Initiator
 import com.example.state.TradeState
 import net.corda.core.contracts.Command
+import net.corda.core.contracts.Requirements.using
 import net.corda.core.contracts.requireThat
 import net.corda.core.flows.*
 import net.corda.core.identity.Party
@@ -25,7 +26,15 @@ import net.corda.core.utilities.ProgressTracker.Step
  *
  * All methods called within the [FlowLogic] sub-class need to be annotated with the @Suspendable annotation.
  */
-object ExampleFlow {
+object TradeFlow {
+    val askPrices = HashMap<String, Int>()
+
+    fun init() {
+        askPrices["Bond1"] = 90
+        askPrices["Bond2"] = 80
+        askPrices["Bond3"] = 70
+    }
+
     @InitiatingFlow
     @StartableByRPC
     class Initiator(val price: Int,
@@ -102,17 +111,27 @@ object ExampleFlow {
     class Acceptor(val otherPartySession: FlowSession) : FlowLogic<SignedTransaction>() {
         @Suspendable
         override fun call(): SignedTransaction {
+            init()
             val signTransactionFlow = object : SignTransactionFlow(otherPartySession) {
                 override fun checkTransaction(stx: SignedTransaction) = requireThat {
                     val output = stx.tx.outputs.single().data
-                    "This must be an Trade transaction." using (output is TradeState)
+                    "This must be a Trade transaction." using (output is TradeState)
                     val trade = output as TradeState
-                    "I won't accept Trades with a price over 100." using (trade.price <= 100)
+                    "I won't accept Trades with unknown asset." using (askPrices.containsKey(trade.asset))
+                    checkPrice(trade)
                 }
             }
             val txId = subFlow(signTransactionFlow).id
 
             return subFlow(ReceiveFinalityFlow(otherPartySession, expectedTxId = txId))
+        }
+
+        fun checkPrice(trade: TradeState) {
+            for ((asset, askPrice) in askPrices) {
+                if (trade.asset == asset) {
+                    "I won't accept Trades with a price below asked." using (trade.price >= askPrice)
+                }
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 package com.example.server
 
-import com.example.flow.ExampleFlow.Initiator
+import com.example.flow.TradeFlow.Initiator
 import com.example.state.TradeState
 import net.corda.core.contracts.StateAndRef
 import net.corda.core.identity.CordaX500Name

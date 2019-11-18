@@ -13,7 +13,7 @@ import javax.persistence.Table
 object TradeSchema
 
 /**
- * An IOUState schema.
+ * A TradeState schema.
  */
 object TradeSchemaV1 : MappedSchema(
         schemaFamily = TradeSchema.javaClass,
